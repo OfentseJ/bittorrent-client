@@ -3,7 +3,6 @@
 const fs = reqire("fs");
 const bencode = require("bencode");
 const crypto = require("crypto");
-const bignum = require("bignum");
 
 module.exports.open = (filepath) => {
   return bencode.decode(fs.readFileSync(filepath));
@@ -11,10 +10,15 @@ module.exports.open = (filepath) => {
 
 module.exports.size = (torrent) => {
   const size = torrent.info.files
-    ? torrent.info.files.map((file) => file.length).reduce((a, b) => a + b)
-    : torrent.info.length;
+    ? torrent.info.files
+        .map((file) => BigInt(file.length))
+        .reduce((a, b) => a + b)
+    : BigInt(torrent.info.length);
 
-  return bignum.toBuffer(size, { size: 8 });
+  const buf = Buffer.alloc(8);
+  buf.writeBigUInt64BE(size);
+
+  return buf;
 };
 
 module.exports.infoHash = (torrent) => {
