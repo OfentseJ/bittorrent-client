@@ -48,7 +48,7 @@ function buildConnReq() {
   return buf;
 }
 
-function parseConnResp(resp) {
+function parseConnReq(resp) {
   return {
     action: resp.readUInt32BE(0),
     transaction_id: resp.readUInt32BE(4),
