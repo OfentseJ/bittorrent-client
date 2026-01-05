@@ -1,7 +1,7 @@
 "use strict";
 
-const fs = reqire("fs");
-const bencode = require("bencode");
+const fs = require("fs");
+const bencode = require("bencode.js");
 const crypto = require("crypto");
 
 module.exports.open = (filepath) => {

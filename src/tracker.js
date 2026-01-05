@@ -1,13 +1,12 @@
 "use strict";
-const dgram = reqire("dgram");
+const dgram = require("dgram");
 const Buffer = require("buffer").Buffer;
-const urlParse = require("url");
 const crypto = require("crypto");
 const torrentParser = require("./torrent-parser");
 const util = require("./util");
 
 module.exports.getPeers = (torrent, callback) => {
-  const socket = dgram.creatSocket("udp4");
+  const socket = dgram.createSocket("udp4");
   const url = torrent.announce.toString("utf8");
 
   udpSend(socket, buildConnReq(), url);
@@ -25,7 +24,7 @@ module.exports.getPeers = (torrent, callback) => {
 };
 
 function udpSend(socket, message, rawUrl, callback = () => {}) {
-  const url = urlParse(rawUrl);
+  const url = new URL(rawUrl);
   socket.send(message, 0, message.length, url.port, url.host, callback);
 }
 

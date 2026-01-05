@@ -11,6 +11,6 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "bencode": "^4.0.0"
+    "bencode.js": "^1.0.0"
   }
 }
