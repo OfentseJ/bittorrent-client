@@ -14,18 +14,19 @@ module.exports.getPeers = (torrent, callback) => {
   socket.on("message", (response) => {
     if (respType(response) === "connect") {
       const connReq = parseConnReq(response);
-      const announceReq = buildAnnounceReq(connReq.connectionId, torrent);
+      const announceReq = buildAnnounceReq(connReq.connection_id, torrent);
       udpSend(socket, announceReq, url);
     } else if (respType(response) === "announce") {
       const announceResp = parseAnnounceResp(response);
       callback(announceResp.peers);
+      socket.close();
     }
   });
 };
 
 function udpSend(socket, message, rawUrl, callback = () => {}) {
   const url = new URL(rawUrl);
-  socket.send(message, 0, message.length, url.port, url.host, callback);
+  socket.send(message, 0, message.length, url.port, url.hostname, callback);
 }
 
 function respType(resp) {
@@ -35,7 +36,7 @@ function respType(resp) {
 }
 
 function buildConnReq() {
-  const buf = Buffer.alloc(16);
+  const buf = Buffer.allocUnsafe(16);
 
   buf.writeUInt32BE(0x417, 0);
   buf.writeUInt32BE(0x27101980, 4);
@@ -51,7 +52,7 @@ function parseConnReq(resp) {
   return {
     action: resp.readUInt32BE(0),
     transaction_id: resp.readUInt32BE(4),
-    connection_id: resp.splice(8),
+    connection_id: resp.slice(8),
   };
 }
 
@@ -77,7 +78,7 @@ function buildAnnounceReq(connId, torrent, port = 6881) {
   // event
   buf.writeUInt32BE(0, 80);
   // ip address
-  buf.writeUInt32BE(0, 80);
+  buf.writeUInt32BE(0, 84);
   // key
   crypto.randomBytes(4).copy(buf, 88);
   // num want
@@ -100,12 +101,13 @@ function parseAnnounceResp(resp) {
   return {
     action: resp.readUInt32BE(0),
     transaction_id: resp.readUInt32BE(4),
-    leechers: resp.readUInt32BE(8),
-    seeders: resp.readUInt32BE(12),
+    interval: resp.readUInt32BE(8),
+    leechers: resp.readUInt32BE(12),
+    seeders: resp.readUInt32BE(16),
     peers: group(resp.slice(20), 6).map((address) => {
       return {
-        ip: address.slice(0, 4).join("."),
-        port: address.readUInt32BE(4),
+        ip: Array.from(address.slice(0, 4)).join("."),
+        port: address.readUInt16BE(4),
       };
     }),
   };
