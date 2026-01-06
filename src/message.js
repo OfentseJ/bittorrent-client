@@ -17,7 +17,7 @@ module.exports.buildHandshake = (torrent) => {
   //info hash
   torrentParser.infoHash(torrent).copy(buf, 28);
   //peer id
-  buf.write(util.genId());
+  util.genId().copy(buf, 48);
   return buf;
 };
 
@@ -28,7 +28,28 @@ module.exports.buildChoke = () => {
   //length
   buf.writeUInt32BE(1, 0);
   //id
+  buf.writeUInt8(0, 4);
+  return buf;
+};
+
+module.exports.buildUnchoke = () => {
+  const buf = Buffer.alloc(5);
+  buf.writeUInt32BE(1, 0);
   buf.writeUInt8(1, 4);
+  return buf;
+};
+
+module.exports.buildInterested = () => {
+  const buf = Buffer.alloc(5);
+  buf.writeUInt32BE(1, 0);
+  buf.writeUInt8(2, 4);
+  return buf;
+};
+
+module.exports.buildNotInterested = () => {
+  const buf = Buffer.alloc(5);
+  buf.writeUInt32BE(1, 0);
+  buf.writeUInt8(3, 4);
   return buf;
 };
 
@@ -44,9 +65,9 @@ module.exports.buildHave = (payload) => {
 };
 
 module.exports.buildBitfield = (bitfield) => {
-  const buf = Buffer.alloc(14);
+  const buf = Buffer.alloc(4 + 1 + bitfield.length);
   // length
-  buf.writeUInt32BE(payload.length + 1, 0);
+  buf.writeUInt32BE(bitfield.length + 1, 0);
   // id
   buf.writeUInt8(5, 4);
   // bitfield
