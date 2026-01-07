@@ -5,10 +5,11 @@ const Buffer = require("buffer").Buffer;
 const tracker = require("./tracker");
 const message = require("./message");
 const Pieces = require("./Pieces");
+const Queue = require("./Queue");
 
 module.exports = (torrent) => {
   tracker.getPeers(torrent, (peers) => {
-    const pieces = new Pieces(torrent.info.pieces.length / 20);
+    const pieces = new Pieces(torrent);
     peers.forEach((peer) => download(peer, torrent, pieces));
   });
 };
@@ -19,7 +20,7 @@ function download(peer, torrent, pieces) {
   socket.connect(peer.port, peer.ip, () => {
     socket.write(message.buildHandshake(torrent));
   });
-  const queue = [];
+  const queue = new Queue(torrent);
   onWholeMsg(socket, (msg) => msgHandler(msg, socket, pieces, queue));
 }
 
@@ -29,17 +30,22 @@ function msgHandler(msg, socket, pieces, queue) {
   } else {
     const m = message.parse(msg);
 
-    if (m.id === 0) chokeHandler();
-    if (m.id === 1) unchokeHandler();
-    if (m.id === 4) haveHandler(m.payload, socket, pieces, queue);
+    if (m.id === 0) chokeHandler(socket);
+    if (m.id === 1) unchokeHandler(socket, pieces, queue);
+    if (m.id === 4) haveHandler(m.payload);
     if (m.id === 5) bitfieldHandler(m.payload);
-    if (m.id === 7) pieceHandler(m.payload, socket, pieces, queue);
+    if (m.id === 7) pieceHandler(m.payload);
   }
 }
 
-function chokeHandler() {}
+function chokeHandler(socket) {
+  socket.end();
+}
 
-function unchokeHandler() {}
+function unchokeHandler(socket, pieces, queue) {
+  queue.choked = false;
+  requestPiece(socket, pieceHandler, queue);
+}
 
 function haveHandler(payload, socket, pieces, queue) {
   const pieceIndex = payload.readUInt32BE(0);
@@ -60,10 +66,10 @@ function requestPiece(socket, pieces, queue) {
   if (queue.chocked) return null;
 
   while (queue.queue.length) {
-    const pieceIndex = queue.shift();
-    if (pieces.needed(pieceIndex)) {
-      socket.write(message.buildRequest(pieceIndex));
-      pieces.addRequested(pieceIndex);
+    const pieceBlock = queue.deque();
+    if (pieces.needed(pieceBlock)) {
+      socket.write(message.buildRequest(pieceBlock));
+      pieces.addRequested(pieceBlock);
       break;
     }
   }
