@@ -1,6 +1,6 @@
 "use strict";
 
-module.exports = class {
+export default class {
   constructor(size) {
     this.requested = new Array(size).fill(false);
     this.received = new Array(size).fill(false);
@@ -24,4 +24,4 @@ module.exports = class {
   isDone() {
     return this.received.every((i) => i === true);
   }
-};
+}
