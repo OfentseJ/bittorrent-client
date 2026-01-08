@@ -1,7 +1,7 @@
 "use strict";
 
 const fs = require("fs");
-const bencode = require("bencode.js");
+const bencode = require("bencode.js"); // Ensure you have this package
 const crypto = require("crypto");
 
 module.exports.open = (filepath) => {
@@ -10,15 +10,15 @@ module.exports.open = (filepath) => {
 
 module.exports.size = (torrent) => {
   const size = torrent.info.files
-    ? torrent.info.files
-        .map((file) => BigInt(file.length))
-        .reduce((a, b) => a + b)
-    : BigInt(torrent.info.length);
+    ? torrent.info.files.map((file) => file.length).reduce((a, b) => a + b)
+    : torrent.info.length;
 
-  const buf = Buffer.alloc(8);
-  buf.writeBigUInt64BE(size);
+  // If you strictly need a Buffer return for other parts of your app:
+  // const buf = Buffer.alloc(8);
+  // buf.writeBigUInt64BE(BigInt(size));
+  // return buf;
 
-  return buf;
+  return size;
 };
 
 module.exports.infoHash = (torrent) => {
@@ -26,28 +26,33 @@ module.exports.infoHash = (torrent) => {
   return crypto.createHash("sha1").update(info).digest();
 };
 
-module.exports.BLOCK_LEN = Math.pow(2, 4);
+// Standard block size is 2^14 (16384 bytes)
+module.exports.BLOCK_LEN = Math.pow(2, 14);
 
-module.exports.pieceLen = (torrent, pieceIndex) => {
-  const totalLength = this.size(torrent).readBigUInt64BE(0);
+module.exports.pieceLen = function (torrent, pieceIndex) {
+  const totalLength = this.size(torrent);
   const pieceLength = torrent.info["piece length"];
 
-  const lastPieceLength = totalLength % pieceLength;
   const lastPieceIndex = Math.floor(totalLength / pieceLength);
 
-  return lastPieceIndex === pieceIndex ? lastPieceLength : pieceLength;
+  return lastPieceIndex === pieceIndex
+    ? totalLength % pieceLength
+    : pieceLength;
 };
 
-module.exports.blocksPerPiece = (torrent, pieceIndex) => {
+module.exports.blocksPerPiece = function (torrent, pieceIndex) {
   const pieceLength = this.pieceLen(torrent, pieceIndex);
   return Math.ceil(pieceLength / this.BLOCK_LEN);
 };
 
-module.exports.blockLen = (torrent, pieceIndex, blockIndex) => {
+module.exports.blockLen = function (torrent, pieceIndex, blockIndex) {
   const pieceLength = this.pieceLen(torrent, pieceIndex);
 
-  const lastPieceLength = pieceLength % this.BLOCK_LEN;
-  const lastPieceIndex = Math.floor(this.pieceLength / this.BLOCK_LEN);
+  const lastBlockIndex = Math.floor(pieceLength / this.BLOCK_LEN);
+  const lastBlockLength = pieceLength % this.BLOCK_LEN;
 
-  return blockIndex === lastPieceIndex ? lastPieceLength : this.BLOCK_LEN;
+  if (blockIndex === lastBlockIndex && lastBlockLength > 0) {
+    return lastBlockLength;
+  }
+  return this.BLOCK_LEN;
 };

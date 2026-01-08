@@ -7,26 +7,61 @@ const util = require("./util");
 
 module.exports.getPeers = (torrent, callback) => {
   const socket = dgram.createSocket("udp4");
-  const url = torrent.announce.toString("utf8");
+  const url = "udp://tracker.opentrackr.org:1337";
+  // 1. Validate Protocol
+  if (url.startsWith("http")) {
+    console.error(`Error: This torrent uses an HTTP tracker (${url}).`);
+    console.error("This client only supports UDP trackers (udp://).");
+    return;
+  }
 
+  // 2. Send Connect Request with Retry Logic
   udpSend(socket, buildConnReq(), url);
 
+  let retries = 0;
+  const retryInterval = setInterval(() => {
+    if (retries >= 3) {
+      console.error(
+        "Tracker: No response after 3 attempts. Tracker might be down."
+      );
+      clearInterval(retryInterval);
+      socket.close();
+      return;
+    }
+    console.log("Tracker: timed out, retrying...");
+    udpSend(socket, buildConnReq(), url);
+    retries++;
+  }, 2000); // Wait 2 seconds before retrying
+
   socket.on("message", (response) => {
+    // 3. Clear the retry timer as soon as we get a response
+    clearInterval(retryInterval);
+
     if (respType(response) === "connect") {
       const connReq = parseConnReq(response);
+      console.log("Tracker: connected!"); // Log success
       const announceReq = buildAnnounceReq(connReq.connection_id, torrent);
       udpSend(socket, announceReq, url);
     } else if (respType(response) === "announce") {
       const announceResp = parseAnnounceResp(response);
+      console.log("Tracker: received peers!"); // Log success
       callback(announceResp.peers);
       socket.close();
     }
+  });
+
+  socket.on("error", (err) => {
+    console.error(`Tracker Socket Error: ${err.message}`);
+    socket.close();
   });
 };
 
 function udpSend(socket, message, rawUrl, callback = () => {}) {
   const url = new URL(rawUrl);
-  socket.send(message, 0, message.length, url.port, url.hostname, callback);
+  // Default to port 80 if none provided, though UDP trackers usually use 6969 or 1337
+  const port = url.port || 80;
+  // console.log(`Sending to ${url.hostname}:${port}`); // Uncomment to debug address
+  socket.send(message, 0, message.length, port, url.hostname, callback);
 }
 
 function respType(resp) {
@@ -37,14 +72,10 @@ function respType(resp) {
 
 function buildConnReq() {
   const buf = Buffer.allocUnsafe(16);
-
   buf.writeUInt32BE(0x417, 0);
   buf.writeUInt32BE(0x27101980, 4);
-
   buf.writeUInt32BE(0, 8);
-
   crypto.randomBytes(4).copy(buf, 12);
-
   return buf;
 }
 
@@ -58,34 +89,19 @@ function parseConnReq(resp) {
 
 function buildAnnounceReq(connId, torrent, port = 6881) {
   const buf = Buffer.allocUnsafe(98);
-
-  // connection id
   connId.copy(buf, 0);
-  // action
   buf.writeUInt32BE(1, 8);
-  // transaction id
   crypto.randomBytes(4).copy(buf, 12);
-  // info hash
   torrentParser.infoHash(torrent).copy(buf, 16);
-  // peerId
   util.genId().copy(buf, 36);
-  // downloaded
   Buffer.alloc(8).copy(buf, 56);
-  // left
   torrentParser.size(torrent).copy(buf, 64);
-  // uploaded
   Buffer.alloc(8).copy(buf, 72);
-  // event
   buf.writeUInt32BE(0, 80);
-  // ip address
   buf.writeUInt32BE(0, 84);
-  // key
   crypto.randomBytes(4).copy(buf, 88);
-  // num want
   buf.writeInt32BE(-1, 92);
-  // port
   buf.writeUInt16BE(port, 96);
-
   return buf;
 }
 

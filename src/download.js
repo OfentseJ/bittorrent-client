@@ -8,7 +8,9 @@ const Pieces = require("./Pieces");
 const Queue = require("./Queue");
 
 module.exports = (torrent, path) => {
+  console.log("Tracker: contacting..."); // LOG: Start
   tracker.getPeers(torrent, (peers) => {
+    console.log("Tracker: received " + peers.length + " peers"); // LOG: Success
     const pieces = new Pieces(torrent);
     const file = fs.openSync(path, "w");
     peers.forEach((peer) => download(peer, torrent, pieces, file));
@@ -16,11 +18,16 @@ module.exports = (torrent, path) => {
 };
 
 function download(peer, torrent, pieces, file) {
-  const socket = net.Socket();
-  socket.on("error", console.log);
+  const socket = new net.Socket();
+  socket.on("error", (err) => {
+    console.log("Socket Error: " + err.message);
+  });
+
   socket.connect(peer.port, peer.ip, () => {
+    console.log(`Connected to peer: ${peer.ip}:${peer.port}`); // LOG: Connection
     socket.write(message.buildHandshake(torrent));
   });
+
   const queue = new Queue(torrent);
   onWholeMsg(socket, (msg) =>
     msgHandler(msg, socket, pieces, queue, torrent, file)
@@ -54,11 +61,12 @@ function isHandshake(msg) {
 
 function msgHandler(msg, socket, pieces, queue, torrent, file) {
   if (isHandshake(msg)) {
+    console.log("Handshake successful with peer"); // LOG: Handshake
     socket.write(message.buildInterested());
   } else {
     const m = message.parse(msg);
 
-    if (m.id === 0) chokeHandler(socket);
+    if (m.id === 0) chokeHandler(socket, queue);
     if (m.id === 1) unchokeHandler(socket, pieces, queue);
     if (m.id === 4) haveHandler(socket, pieces, queue, m.payload);
     if (m.id === 5) bitfieldHandler(socket, pieces, queue, m.payload);
@@ -67,16 +75,18 @@ function msgHandler(msg, socket, pieces, queue, torrent, file) {
   }
 }
 
-function chokeHandler(socket) {
-  socket.end();
+function chokeHandler(socket, queue) {
+  console.log("Peer choked us");
+  queue.choked = true;
 }
 
 function unchokeHandler(socket, pieces, queue) {
+  console.log("Peer unchoked us!");
   queue.choked = false;
   requestPiece(socket, pieces, queue);
 }
 
-function haveHandler(payload, socket, pieces, queue) {
+function haveHandler(socket, pieces, queue, payload) {
   const pieceIndex = payload.readUInt32BE(0);
   const queueEmpty = queue.length === 0;
   queue.queue(pieceIndex);
@@ -97,7 +107,7 @@ function bitfieldHandler(socket, pieces, queue, payload) {
 }
 
 function pieceHandler(socket, pieces, queue, torrent, file, pieceResp) {
-  console.log(pieceResp);
+  console.log(`Received piece: ${pieceResp.index}`); // LOG: Progress
   pieces.addReceived(pieceResp);
 
   const offset =
@@ -113,7 +123,7 @@ function pieceHandler(socket, pieces, queue, torrent, file, pieceResp) {
 }
 
 function requestPiece(socket, pieces, queue) {
-  if (queue.chocked) return null;
+  if (queue.choked) return null;
 
   while (queue.queue.length) {
     const pieceBlock = queue.deque();
