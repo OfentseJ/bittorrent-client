@@ -125,7 +125,7 @@ function pieceHandler(socket, pieces, queue, torrent, file, pieceResp) {
 function requestPiece(socket, pieces, queue) {
   if (queue.choked) return null;
 
-  while (queue.queue.length) {
+  while (queue.length()) {
     const pieceBlock = queue.deque();
     if (pieces.needed(pieceBlock)) {
       socket.write(message.buildRequest(pieceBlock));

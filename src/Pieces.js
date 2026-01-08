@@ -1,13 +1,14 @@
 "use strict";
 
 const tp = require("./torrent-parser");
+
 module.exports = class {
   constructor(torrent) {
     function buildPiecesArray() {
       const nPieces = torrent.info.pieces.length / 20;
       const arr = new Array(nPieces).fill(null);
-      return arr.map(
-        (_, i) => new Array(tp.blocksPerPiece(torrent, i).fill(false))
+      return arr.map((_, i) =>
+        new Array(tp.blocksPerPiece(torrent, i)).fill(false)
       );
     }
 
@@ -22,7 +23,7 @@ module.exports = class {
 
   addReceived(pieceBlock) {
     const blockIndex = pieceBlock.begin / tp.BLOCK_LEN;
-    this._received[pieceBlock.index][blockIndex];
+    this._received[pieceBlock.index][blockIndex] = true;
   }
 
   needed(pieceBlock) {
@@ -34,6 +35,6 @@ module.exports = class {
   }
 
   isDone() {
-    return this._requested.every((blocks) => blocks.every((i) => i));
+    return this._received.every((blocks) => blocks.every((i) => i));
   }
 };
