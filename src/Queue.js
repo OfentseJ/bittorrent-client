@@ -2,7 +2,7 @@
 
 const tp = require("./torrent-parser");
 
-export default class {
+module.exports = class {
   constructor(torrent) {
     this._torrent = torrent;
     this._queue = [];
@@ -30,4 +30,4 @@ export default class {
   length() {
     return this._queue.length;
   }
-}
+};

@@ -1,7 +1,7 @@
 "use strict";
 
 const tp = require("./torrent-parser");
-export default class {
+module.exports = class {
   constructor(torrent) {
     function buildPiecesArray() {
       const nPieces = torrent.info.pieces.length / 20;
@@ -36,4 +36,4 @@ export default class {
   isDone() {
     return this._requested.every((blocks) => blocks.every((i) => i));
   }
-}
+};
