@@ -82,20 +82,21 @@ function unchokeHandler(socket, pieces, queue) {
 
 function haveHandler(socket, pieces, queue, payload) {
   const pieceIndex = payload.readUInt32BE(0);
-  const queueEmpty = queue.length() === 0;
-  queue.queue(pieceIndex);
-  if (queueEmpty) requestPiece(socket, pieces, queue);
+  queue.addHave(pieceIndex);
+  if (queue.length() === 0) requestPiece(socket, pieces, queue);
 }
 
 function bitfieldHandler(socket, pieces, queue, payload) {
-  const queueEmpty = queue.length() === 0;
   payload.forEach((byte, i) => {
     for (let j = 0; j < 8; j++) {
-      if (byte % 2) queue.queue(i * 8 + 7 - j);
+      if (byte % 2) {
+        const pieceIndex = i * 8 + 7 - j;
+        queue.addHave(pieceIndex);
+      }
       byte = Math.floor(byte / 2);
     }
   });
-  if (queueEmpty) requestPiece(socket, pieces, queue);
+  if (queue.length() === 0) requestPiece(socket, pieces, queue);
 }
 
 function pieceHandler(socket, pieces, queue, torrent, file, pieceResp) {
@@ -133,9 +134,12 @@ function requestPiece(socket, pieces, queue) {
   if (queue.choked) return null;
 
   if (queue.length() === 0) {
-    pieces._received.forEach((blocks, pieceIndex) => {
-      if (!blocks.every((i) => i === true)) queue.queue(pieceIndex);
-    });
+    for (let i = 0; i < queue._peerPieces.length; i++) {
+      if (queue.has(i) && pieceHandler.isNeeded(i)) {
+        queue.queue(i);
+        break;
+      }
+    }
   }
   while (queue.length()) {
     const pieceBlock = queue.deque();
