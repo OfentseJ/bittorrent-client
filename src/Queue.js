@@ -7,6 +7,16 @@ module.exports = class {
     this._torrent = torrent;
     this._queue = [];
     this.choked = true;
+    const nPieces = Math.ceil(torrent.info.pieces.length / 20);
+    this._peerPieces = new Array(nPieces).fill(false);
+  }
+
+  addHave(pieceIndex) {
+    this._peerPieces[pieceIndex] = true;
+  }
+
+  has(pieceIndex) {
+    return this._peerPieces[pieceIndex];
   }
 
   queue(pieceIndex) {
