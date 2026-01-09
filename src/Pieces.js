@@ -37,4 +37,8 @@ module.exports = class {
   isDone() {
     return this._received.every((blocks) => blocks.every((i) => i));
   }
+
+  isNeeded(pieceIndex) {
+    return this._requested[pieceIndex].some((block) => block === false);
+  }
 };
