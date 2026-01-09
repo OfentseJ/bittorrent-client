@@ -8,9 +8,7 @@ const Pieces = require("./Pieces");
 const Queue = require("./Queue");
 
 module.exports = (torrent, path) => {
-  console.log("Tracker: contacting..."); // LOG: Start
   tracker.getPeers(torrent, (peers) => {
-    console.log("Tracker: received " + peers.length + " peers"); // LOG: Success
     const pieces = new Pieces(torrent);
     const file = fs.openSync(path, "w");
     peers.forEach((peer) => download(peer, torrent, pieces, file));
@@ -20,11 +18,11 @@ module.exports = (torrent, path) => {
 function download(peer, torrent, pieces, file) {
   const socket = new net.Socket();
   socket.on("error", (err) => {
-    console.log("Socket Error: " + err.message);
+    // Keep this silent or minimal to avoid spamming the progress bar
+    // console.log("Socket Error: " + err.message);
   });
 
   socket.connect(peer.port, peer.ip, () => {
-    console.log(`Connected to peer: ${peer.ip}:${peer.port}`); // LOG: Connection
     socket.write(message.buildHandshake(torrent));
   });
 
@@ -39,7 +37,6 @@ function onWholeMsg(socket, callback) {
   let handshake = true;
 
   socket.on("data", (recvBuf) => {
-    // msgLen calculates the length of a whole message
     const msgLen = () =>
       handshake ? savedBuf.readUInt8(0) + 49 : savedBuf.readInt32BE(0) + 4;
     savedBuf = Buffer.concat([savedBuf, recvBuf]);
@@ -61,7 +58,6 @@ function isHandshake(msg) {
 
 function msgHandler(msg, socket, pieces, queue, torrent, file) {
   if (isHandshake(msg)) {
-    console.log("Handshake successful with peer"); // LOG: Handshake
     socket.write(message.buildInterested());
   } else {
     const m = message.parse(msg);
@@ -76,27 +72,23 @@ function msgHandler(msg, socket, pieces, queue, torrent, file) {
 }
 
 function chokeHandler(socket, queue) {
-  console.log("Peer choked us");
   queue.choked = true;
 }
 
 function unchokeHandler(socket, pieces, queue) {
-  console.log("Peer unchoked us!");
   queue.choked = false;
   requestPiece(socket, pieces, queue);
 }
 
 function haveHandler(socket, pieces, queue, payload) {
   const pieceIndex = payload.readUInt32BE(0);
-  const queueEmpty = queue.length === 0;
+  const queueEmpty = queue.length() === 0;
   queue.queue(pieceIndex);
-  if (queueEmpty) {
-    requestPiece(socket, pieces, queue);
-  }
+  if (queueEmpty) requestPiece(socket, pieces, queue);
 }
 
 function bitfieldHandler(socket, pieces, queue, payload) {
-  const queueEmpty = queue.length === 0;
+  const queueEmpty = queue.length() === 0;
   payload.forEach((byte, i) => {
     for (let j = 0; j < 8; j++) {
       if (byte % 2) queue.queue(i * 8 + 7 - j);
@@ -107,16 +99,31 @@ function bitfieldHandler(socket, pieces, queue, payload) {
 }
 
 function pieceHandler(socket, pieces, queue, torrent, file, pieceResp) {
-  console.log(`Received piece: ${pieceResp.index}`); // LOG: Progress
   pieces.addReceived(pieceResp);
 
   const offset =
     pieceResp.index * torrent.info["piece length"] + pieceResp.begin;
+
   fs.write(file, pieceResp.block, 0, pieceResp.block.length, offset, () => {});
 
+  // --- PROGRESS BAR START ---
+  const allBlocks = pieces._received.flat();
+  const downloaded = allBlocks.filter((i) => i).length;
+  const total = allBlocks.length;
+  const percent = (downloaded / total) * 100;
+
+  const width = 30;
+  const filled = Math.floor((percent / 100) * width);
+  const bar = "█".repeat(filled) + "-".repeat(width - filled);
+
+  process.stdout.write(`\rDownloading: [${bar}] ${percent.toFixed(2)}% `);
+  // --- PROGRESS BAR END ---
+
   if (pieces.isDone()) {
-    socket.end();
-    console.log("DONE!");
+    console.log("\nDownload complete!");
+    console.log(`File saved to: ${torrent.info.name.toString()}`);
+    fs.closeSync(file);
+    process.exit(0);
   } else {
     requestPiece(socket, pieces, queue);
   }
@@ -125,12 +132,16 @@ function pieceHandler(socket, pieces, queue, torrent, file, pieceResp) {
 function requestPiece(socket, pieces, queue) {
   if (queue.choked) return null;
 
+  if (queue.length() === 0) {
+    pieces._received.forEach((blocks, pieceIndex) => {
+      if (!blocks.every((i) => i === true)) queue.queue(pieceIndex);
+    });
+  }
   while (queue.length()) {
     const pieceBlock = queue.deque();
     if (pieces.needed(pieceBlock)) {
       socket.write(message.buildRequest(pieceBlock));
       pieces.addRequested(pieceBlock);
-      break;
     }
   }
 }
