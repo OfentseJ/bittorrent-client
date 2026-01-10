@@ -41,4 +41,9 @@ module.exports = class {
   isNeeded(pieceIndex) {
     return this._requested[pieceIndex].some((block) => block === false);
   }
+
+  isReceived(pieceBlock) {
+    const blockIndex = pieceBlock.begin / tp.BLOCK_LEN;
+    return this._received[pieceBlock.index][blockIndex];
+  }
 };

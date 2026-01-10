@@ -135,7 +135,7 @@ function requestPiece(socket, pieces, queue) {
 
   if (queue.length() === 0) {
     for (let i = 0; i < queue._peerPieces.length; i++) {
-      if (queue.has(i) && pieceHandler.isNeeded(i)) {
+      if (queue.has(i) && pieces.isNeeded(i)) {
         queue.queue(i);
         break;
       }
@@ -143,7 +143,7 @@ function requestPiece(socket, pieces, queue) {
   }
   while (queue.length()) {
     const pieceBlock = queue.deque();
-    if (pieces.needed(pieceBlock)) {
+    if (!pieces.isReceived(pieceBlock)) {
       socket.write(message.buildRequest(pieceBlock));
       pieces.addRequested(pieceBlock);
     }

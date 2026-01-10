@@ -95,8 +95,7 @@ function buildAnnounceReq(connId, torrent, port = 6881) {
   torrentParser.infoHash(torrent).copy(buf, 16);
   util.genId().copy(buf, 36);
   Buffer.alloc(8).copy(buf, 56);
-  // size() now returns a Number, so we write it directly as a BigInt
-  const size = BigInt(torrentParser.size(torrent));
+  const size = torrentParser.size(torrent);
   buf.writeBigUInt64BE(size, 64);
   Buffer.alloc(8).copy(buf, 72);
   buf.writeUInt32BE(0, 80);
