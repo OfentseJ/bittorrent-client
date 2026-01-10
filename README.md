@@ -96,9 +96,4 @@ Downloading: [████████████------------------] 45.20%
 
 This project is open-source and available for educational purposes.
 
-```
 
-### Next Step
-Would you like me to show you how to initialize a Git repository and push this code to your GitHub?
-
-```
